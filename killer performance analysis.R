@@ -11,8 +11,9 @@ kpm <- read.csv("21-02-18 - kpm.csv", stringsAsFactors=FALSE)
 kpm$notes <- NULL
 head(kpm)
 
-# conert the date data
+# convert the date data
 kpm$date <- as.Date(kpm$date, "%Y-%m-%d")
+kpm$numdate <- as.numeric(kpm$date)
 kpm$dayofweek <- format(kpm$date, "%u")
 kpm$weekend <- factor(kpm$dayofweek %in% c("6","7"))
 
@@ -91,10 +92,10 @@ kpm$perkprincomp <- perkprincomp$scores
 
 # # some plots
 # ggplot(kpm) + geom_histogram(aes(x=bloodpoints), bins=10) +
-#   facet_wrap(~killer, ncol=1) +
+#   facet_wrap(~killer, ncol=1, scales="free_y") +
 #   ggtitle("bloodpoints per killer")
 # ggplot(kpm) + geom_histogram(aes(x=bloodpoints), bins=10) +
-#   facet_wrap(~kills, ncol=1) +
+#   facet_wrap(~kills, ncol=1, scales="free_y") +
 #   ggtitle("bloodpoints by kill count")
 
 # run a model on bloodpoints
@@ -150,11 +151,12 @@ ggplot(killsbykiller) + geom_bar(aes(x=kills, y=killfreq), stat="identity") +
   ylab("frequency")
 
 kbk2 <- dplyr::summarize(group_by(kpm, killer),
-                         meankills = mean(kills, na.rm=TRUE)/4)
+                         meankills = mean(kills, na.rm=TRUE)/4,
+                         n=n())
 kbk2
 
 ggplot(kpm) + geom_boxplot(aes(x=kills, y=bloodpoints, group=kills))
-# ggplot(kpm) + geom_boxplot(aes(x=killer, y=bloodpoints, group=killer))
+ggplot(kpm) + geom_boxplot(aes(x=killer, y=bloodpoints, group=killer))
 
 # view princomp loadings for interpretation
 princoefs <- as.data.frame(coef(winmodel))
@@ -164,3 +166,11 @@ princoefs <- princoefs[grep(x=princoefs$coef,
                             fixed=TRUE),]
 names(princoefs) <- c("est","coef")
 perkprincomp$loadings %*% princoefs$est
+
+# perform a salt model
+kpm$anysalt <- factor(1*(kpm$salt > 0))
+kpm$NOED <- 1*(kpm$perk1 == "NOED") + 1*(kpm$perk2 == "NOED") + 1*(kpm$perk3 == "NOED") + 1*(kpm$perk4 == "NOED")
+saltmodel <- glm(anysalt ~ crossplay + NOED,
+                 family=binomial(),
+                 data=kpm)
+summary(saltmodel)
