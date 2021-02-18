@@ -38,6 +38,10 @@ kpm <- kpm[kpm$killercount >= 5,]
 kpm$loss <- 1*(kpm$kills <= 2)
 kpm$win  <- 1*(kpm$kills >= 3)
 
+# perks
+perklist <- sort(unique(c(kpm$perk1, kpm$perk2, kpm$perk3, kpm$perk4)))
+perklist
+
 # define perk types
 perktypes <- list("slowdown"=c("Oppression",
                                "Pop",
@@ -62,6 +66,7 @@ perktypes <- list("slowdown"=c("Oppression",
                   "information"=c("A Nurse's Calling",
                                   "BBQ",
                                   "Discordance",
+                                  "Spies from the Shadows",
                                   "Surveillance",
                                   "Thrilling Tremors",
                                   "Whispers"))
@@ -83,7 +88,6 @@ perkprincomp <- princomp(kpm[grep(pattern="perks_",
                                   fixed=TRUE)],
                          scores=TRUE)
 kpm$perkprincomp <- perkprincomp$scores
-names(kpm)
 
 # # some plots
 # ggplot(kpm) + geom_histogram(aes(x=bloodpoints), bins=10) +
@@ -134,29 +138,6 @@ plot.gam(winmodel, se=FALSE, select=1)
 # decsummary <- dplyr::summarize(group_by(kpm, decnumtime),
 #                                win=mean(win, na.rm=TRUE))
 # ggplot(decsummary) + geom_line(aes(x=decnumtime, win))
-
-
-# perks
-perklist <- sort(unique(c(kpm$perk1, kpm$perk2, kpm$perk3, kpm$perk4)))
-perklist
-
-# # create columns in the kpm for these
-# for (curperk in perklist) {
-#  
-#   kpm[,paste(curperk, "_ind", sep="")] <- 1*(kpm$perk1 == curperk) + 1*(kpm$perk2 == curperk) + 1*(kpm$perk3 == curperk) + 1*(kpm$perk4 == curperk)
-#   
-# }
-# colnames(kpm) <- gsub(x=colnames(kpm),
-#                       pattern=" ",
-#                       replacement="",
-#                       fixed=TRUE)
-# colnames(kpm) <- gsub(x=colnames(kpm),
-#                       pattern="'",
-#                       replacement="",
-#                       fixed=TRUE)
-# 
-# colnames(kpm)
-
 killsbykiller <- dplyr::summarize(group_by(kpm, killer, kills),
                                   killcount=n())
 tempdf <- dplyr::summarise(group_by(kpm, killer),
