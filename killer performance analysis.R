@@ -168,9 +168,11 @@ names(princoefs) <- c("est","coef")
 perkprincomp$loadings %*% princoefs$est
 
 # perform a salt model
-kpm$anysalt <- factor(1*(kpm$salt > 0))
+kpm$anysalt <- 1*(kpm$salt > 0)
 kpm$NOED <- 1*(kpm$perk1 == "NOED") + 1*(kpm$perk2 == "NOED") + 1*(kpm$perk3 == "NOED") + 1*(kpm$perk4 == "NOED")
-saltmodel <- glm(anysalt ~ crossplay + NOED,
+saltmodel <- glm(anysalt ~ NOED,
                  family=binomial(),
                  data=kpm)
 summary(saltmodel)
+dplyr::summarise(group_by(kpm, crossplay),
+                 meansalt = mean(salt, na.rm=TRUE))
