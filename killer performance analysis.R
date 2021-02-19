@@ -5,9 +5,15 @@ library(ggplot2)
 library(chron)
 library(dplyr)
 library(plyr)
+library(googledrive)
+
+kpm <- drive_download(file=as_id("1a541yFoA2E1xGQEXwhC2Q1x8lZLxFMI1r5FDadc2Hmk"),
+                      path="kpm data.csv",
+                      type="csv",
+                      overwrite=TRUE)
 
 # read file
-kpm <- read.csv("21-02-18 - kpm.csv", stringsAsFactors=FALSE)
+kpm <- read.csv("kpm data.csv", stringsAsFactors=FALSE)
 kpm$notes <- NULL
 head(kpm)
 
@@ -62,6 +68,7 @@ perktypes <- list("slowdown"=c("Oppression",
                             "Unrelenting"),
                   "hex"=c("Ruin",
                           "Devour Hope",
+                          "NOED",
                           "Undying",
                           "Thrill of the Hunt"),
                   "information"=c("A Nurse's Calling",
