@@ -1,11 +1,20 @@
 rm(list=ls())
 
-library(mgcv)
-library(ggplot2)
-library(chron)
-library(dplyr)
-library(plyr)
-library(googledrive)
+require(mgcv)
+require(ggplot2)
+require(chron)
+require(dplyr)
+require(plyr)
+require(googledrive)
+
+# install.packages(pkgs=c("mgcv",
+#                         "ggplot2",
+#                         "chron",
+#                         "dplyr",
+#                         "plyr"))
+
+
+
 
 kpm <- drive_download(file=as_id("1a541yFoA2E1xGQEXwhC2Q1x8lZLxFMI1r5FDadc2Hmk"),
                       path="kpm data.csv",
@@ -27,6 +36,7 @@ kpm$weekend <- factor(kpm$dayofweek %in% c("6","7"))
 kpm$time <- paste(kpm$time, "00", sep=":")
 kpm$time <- chron(times=kpm$time)
 kpm$numtime <- as.numeric(kpm$time)
+kpm$numweek <- as.numeric(as.character(kpm$dayofweek)) + kpm$numtime - 1
 
 ggplot(kpm) + geom_histogram(aes(x=numtime))
 
@@ -39,7 +49,7 @@ killercount <- dplyr::summarize(group_by(kpm, killer),
                                 killercount=n())
 kpm <- left_join(kpm, as.data.frame(killercount),
                  by="killer")
-kpm <- kpm[kpm$killercount >= 5,]
+kpm <- kpm[kpm$killercount >= 20,]
 
 # define covariates to analyze
 kpm$loss <- 1*(kpm$kills <= 2)
@@ -77,7 +87,11 @@ perktypes <- list("slowdown"=c("Oppression",
                                   "Spies from the Shadows",
                                   "Surveillance",
                                   "Thrilling Tremors",
-                                  "Whispers"))
+                                  "Tinkerer",
+                                  "Whispers"),
+                  "stealth"=c("Monitor",
+                              "Tinkerer",
+                              "Whispers"))
                      
 for (curtype in names(perktypes)) {
   
@@ -97,6 +111,9 @@ perkprincomp <- princomp(kpm[grep(pattern="perks_",
                          scores=TRUE)
 kpm$perkprincomp <- perkprincomp$scores
 
+# add one especially for NOED
+kpm$NOED <- 1*(kpm$perk1 == "NOED") + 1*(kpm$perk2 == "NOED") + 1*(kpm$perk3 == "NOED") + 1*(kpm$perk4 == "NOED")
+
 # # some plots
 # ggplot(kpm) + geom_histogram(aes(x=bloodpoints), bins=10) +
 #   facet_wrap(~killer, ncol=1, scales="free_y") +
@@ -106,10 +123,11 @@ kpm$perkprincomp <- perkprincomp$scores
 #   ggtitle("bloodpoints by kill count")
 
 # run a model on bloodpoints
-bpmodel <- gam(bloodpoints ~ killer + perkprincomp + crossplay + s(numtime, bs="cc"),
+bpmodel <- gam(bloodpoints ~ killer + perkprincomp[,1] + crossplay + s(numtime, bs="cc") + s(numdate),
                data=kpm)
 summary(bpmodel)
-plot(bpmodel, se=FALSE, select=1)
+plot(bpmodel, se=FALSE, scale=0, select=1)
+plot(bpmodel, se=FALSE, scale=0, select=2)
 # myplots <- plot.gam(bpmodel, se=FALSE, select=0)
 # tempdf1 <- data.frame(x = myplots[[1]]$x,
 #                       y = myplots[[1]]$fit,
@@ -121,15 +139,23 @@ plot(bpmodel, se=FALSE, select=1)
 # ggplot(tempdf) + geom_line(aes(x=x, y=y, group=weekend, color=weekend)) +
 #   ggtitle("bloodpoint model, cyclical term")
 
+# run a model on kills
+kpm$kills_plusone <- kpm$kills + 1
+killmodel <- gam(kills_plusone ~ killer + perkprincomp[,1] + s(numtime, bs="cc") + s(numdate),
+                 data=kpm,
+                 family=ocat(R = 5))
+summary(killmodel)
+plot.gam(killmodel, se=FALSE, scale=0, select=1)
+plot.gam(killmodel, se=FALSE, scale=0, select=2)
 
-
-# run a model on losses
-winmodel <- gam(win ~ killer + perkprincomp + s(numtime, bs="cc"),
+# run a model on clear wins
+winmodel <- gam(win ~ killer + perkprincomp[,1] + crossplay + s(numtime, bs="cc") + s(numdate),
                 data=kpm,
                 family=binomial())
 summary(winmodel)
 anova(winmodel)
-plot.gam(winmodel, se=FALSE, select=1)
+plot.gam(winmodel, se=FALSE, scale=0, select=1)
+plot.gam(winmodel, se=FALSE, scale=0, select=2)
 # myplots <- plot.gam(winmodel, se=FALSE, select=0)
 # tempdf1 <- data.frame(x = myplots[[1]]$x,
 #                       y = myplots[[1]]$fit,
@@ -159,27 +185,33 @@ ggplot(killsbykiller) + geom_bar(aes(x=kills, y=killfreq), stat="identity") +
 
 kbk2 <- dplyr::summarize(group_by(kpm, killer),
                          meankills = mean(kills, na.rm=TRUE)/4,
+                         meanwins  = mean(win, na.rm=TRUE),
                          n=n())
 kbk2
 
 ggplot(kpm) + geom_boxplot(aes(x=kills, y=bloodpoints, group=kills))
 ggplot(kpm) + geom_boxplot(aes(x=killer, y=bloodpoints, group=killer))
 
-# view princomp loadings for interpretation
-princoefs <- as.data.frame(coef(winmodel))
-princoefs$coef <- rownames(princoefs)
-princoefs <- princoefs[grep(x=princoefs$coef,
-                            pattern="perkprincomp",
-                            fixed=TRUE),]
-names(princoefs) <- c("est","coef")
-perkprincomp$loadings %*% princoefs$est
+# # view princomp loadings for interpretation
+# princoefs <- as.data.frame(coef(winmodel))
+# princoefs$coef <- rownames(princoefs)
+# princoefs <- princoefs[grep(x=princoefs$coef,
+#                             pattern="perkprincomp",
+#                             fixed=TRUE),]
+# names(princoefs) <- c("est","coef")
+# perkprincomp$loadings %*% princoefs$est
 
 # perform a salt model
 kpm$anysalt <- 1*(kpm$salt > 0)
-kpm$NOED <- 1*(kpm$perk1 == "NOED") + 1*(kpm$perk2 == "NOED") + 1*(kpm$perk3 == "NOED") + 1*(kpm$perk4 == "NOED")
-saltmodel <- glm(anysalt ~ NOED,
+saltmodel <- gam(anysalt ~ kills + crossplay + NOED,
                  family=binomial(),
                  data=kpm)
 summary(saltmodel)
 dplyr::summarise(group_by(kpm, crossplay),
                  meansalt = mean(salt, na.rm=TRUE))
+
+# look at particular builds
+tempdf <- kpm[kpm$killer == "Ghostface",]
+tempdf <- tempdf[tempdf$perks_slowdown >= 2,]
+mean(tempdf$kills, na.rm=TRUE)
+mean(tempdf$win, na.rm=TRUE)
