@@ -49,7 +49,7 @@ killercount <- dplyr::summarize(group_by(kpm, killer),
                                 killercount=n())
 kpm <- left_join(kpm, as.data.frame(killercount),
                  by="killer")
-kpm <- kpm[kpm$killercount >= 20,]
+kpm <- kpm[kpm$killercount >= 10,]
 
 # define covariates to analyze
 kpm$loss <- 1*(kpm$kills <= 2)
@@ -151,7 +151,8 @@ plot.gam(killmodel, se=FALSE, scale=0, select=2)
 # run a model on clear wins
 winmodel <- gam(win ~ killer + perkprincomp[,1] + crossplay + s(numtime, bs="cc") + s(numdate),
                 data=kpm,
-                family=binomial())
+                family=binomial(),
+                gamma=0.1)
 summary(winmodel)
 anova(winmodel)
 plot.gam(winmodel, se=FALSE, scale=0, select=1)
@@ -210,8 +211,39 @@ summary(saltmodel)
 dplyr::summarise(group_by(kpm, crossplay),
                  meansalt = mean(salt, na.rm=TRUE))
 
-# look at particular builds
-tempdf <- kpm[kpm$killer == "Ghostface",]
-tempdf <- tempdf[tempdf$perks_slowdown >= 2,]
-mean(tempdf$kills, na.rm=TRUE)
-mean(tempdf$win, na.rm=TRUE)
+winbydate <- as.data.frame(dplyr::summarize(group_by(kpm, date),
+                                            winrate=mean(win, na.rm=TRUE)))
+ggplot(winbydate) + geom_histogram(aes(x=winrate), bins=15)
+
+# analyze runs
+kpm$winrun <- 1
+kpm$lossrun <- 1
+for (currow in 2:nrow(kpm)) {
+  
+  if (is.na(kpm$win[currow])) {
+    
+    kpm$winrun[currow] <- kpm$winrun[currow-1] 
+    kpm$lossrun[currow] <- kpm$lossrun[currow-1]
+  
+  } else {
+  
+    if (kpm$win[currow] == 1) {
+       
+      kpm$winrun[currow] <- kpm$winrun[currow-1] + 1
+      kpm$lossrun[currow] <- 0
+       
+    } else {
+       
+      kpm$winrun[currow] <- 0
+      kpm$lossrun[currow] <- kpm$lossrun[currow-1] + 1
+       
+    }
+    
+  }
+  
+}
+max(kpm$winrun)
+max(kpm$lossrun)
+
+kpm$gamenum <- 1:nrow(kpm)
+ggplot(kpm) + geom_line(aes(x=gamenum, y=winrun))
