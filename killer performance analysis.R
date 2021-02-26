@@ -6,6 +6,7 @@ require(chron)
 require(dplyr)
 require(plyr)
 require(googledrive)
+require(zoo)
 
 # install.packages(pkgs=c("mgcv",
 #                         "ggplot2",
@@ -104,13 +105,29 @@ for (curtype in names(perktypes)) {
 
 }
 
-# calculate a princomp of all these, since they correlate
-perkprincomp <- princomp(kpm[grep(pattern="perks_",
-                                  x=colnames(kpm),
-                                  fixed=TRUE)],
-                         scores=TRUE)
-kpm$perkprincomp <- perkprincomp$scores
+# # calculate a princomp of all these, since they correlate
+# perkprincomp <- princomp(kpm[grep(pattern="perks_",
+#                                   x=colnames(kpm),
+#                                   fixed=TRUE)],
+#                          scores=TRUE)
+# kpm$perkprincomp <- perkprincomp$scores
 
+# get a factor for builds
+kpm$build <- ""
+for (currow in 1:nrow(kpm)) {
+  
+  kpm$build[currow] <- paste(sort(c(kpm$perk1[currow],
+                                  kpm$perk2[currow],
+                                  kpm$perk3[currow],
+                                  kpm$perk4[currow])),
+                             collapse=":")
+}
+buildtable <- as.data.frame(table(kpm$build))
+names(buildtable) <- c("build", "buildfrequency")
+kpm <- left_join(kpm, buildtable, by="build")
+kpm$build[kpm$buildfrequency <= 5] <- "uncommon build"
+kpm$build <- factor(kpm$build)
+  
 # add one especially for NOED
 kpm$NOED <- 1*(kpm$perk1 == "NOED") + 1*(kpm$perk2 == "NOED") + 1*(kpm$perk3 == "NOED") + 1*(kpm$perk4 == "NOED")
 
@@ -123,7 +140,7 @@ kpm$NOED <- 1*(kpm$perk1 == "NOED") + 1*(kpm$perk2 == "NOED") + 1*(kpm$perk3 == 
 #   ggtitle("bloodpoints by kill count")
 
 # run a model on bloodpoints
-bpmodel <- gam(bloodpoints ~ killer + perkprincomp[,1] + crossplay + s(numtime, bs="cc") + s(numdate),
+bpmodel <- gam(bloodpoints ~ 0 + build + killer + crossplay + s(numtime, bs="cc") + s(numdate),
                data=kpm)
 summary(bpmodel)
 plot(bpmodel, se=FALSE, scale=0, select=1)
@@ -141,7 +158,7 @@ plot(bpmodel, se=FALSE, scale=0, select=2)
 
 # run a model on kills
 kpm$kills_plusone <- kpm$kills + 1
-killmodel <- gam(kills_plusone ~ killer + perkprincomp[,1] + s(numtime, bs="cc") + s(numdate),
+killmodel <- gam(kills_plusone ~ 0 + build + killer + s(numtime, bs="cc") + s(numdate),
                  data=kpm,
                  family=ocat(R = 5))
 summary(killmodel)
@@ -149,7 +166,7 @@ plot.gam(killmodel, se=FALSE, scale=0, select=1)
 plot.gam(killmodel, se=FALSE, scale=0, select=2)
 
 # run a model on clear wins
-winmodel <- gam(win ~ killer + perkprincomp[,1] + crossplay + s(numtime, bs="cc") + s(numdate),
+winmodel <- gam(win ~ 0 + build + killer + crossplay + s(numtime, bs="cc") + s(numdate),
                 data=kpm,
                 family=binomial(),
                 gamma=0.1)
@@ -247,3 +264,14 @@ max(kpm$lossrun)
 
 kpm$gamenum <- 1:nrow(kpm)
 ggplot(kpm) + geom_line(aes(x=gamenum, y=winrun))
+
+kpm$movingwin <- NA
+for (currow in 11:nrow(kpm)) {
+  
+  kpm$movingwin[currow] <- mean(kpm$win[(currow-10):currow], na.rm=TRUE)
+  
+}
+ggplot(kpm) + geom_line(aes(x=gamenum, y=movingwin)) +
+  ggtitle("ten-game moving window win rate (>2K)") +
+  xlab("game number") + ylab("win rate")
+
