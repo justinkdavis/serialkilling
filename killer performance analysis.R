@@ -125,8 +125,9 @@ for (currow in 1:nrow(kpm)) {
 buildtable <- as.data.frame(table(kpm$build))
 names(buildtable) <- c("build", "buildfrequency")
 kpm <- left_join(kpm, buildtable, by="build")
-kpm$build[kpm$buildfrequency <= 5] <- "uncommon build"
+kpm$build[kpm$buildfrequency <= 10] <- "uncommon build"
 kpm$build <- factor(kpm$build)
+table(kpm$build)
   
 # add one especially for NOED
 kpm$NOED <- 1*(kpm$perk1 == "NOED") + 1*(kpm$perk2 == "NOED") + 1*(kpm$perk3 == "NOED") + 1*(kpm$perk4 == "NOED")
@@ -168,12 +169,20 @@ plot.gam(killmodel, se=FALSE, scale=0, select=2)
 # run a model on clear wins
 winmodel <- gam(win ~ 0 + build + killer + crossplay + s(numtime, bs="cc") + s(numdate),
                 data=kpm,
-                family=binomial(),
-                gamma=0.1)
+                family=binomial())
 summary(winmodel)
 anova(winmodel)
 plot.gam(winmodel, se=FALSE, scale=0, select=1)
 plot.gam(winmodel, se=FALSE, scale=0, select=2)
+
+wincoefs <- as.data.frame(coef(winmodel))
+wincoefs$variable <- rownames(wincoefs)
+names(wincoefs) <- c("est", "var")
+wincoefs <- wincoefs[grep(x=wincoefs$var,
+                          pattern="build",
+                          fixed=TRUE),]
+rownames(wincoefs) <- 1:nrow(wincoefs)
+wincoefs[order(wincoefs$est),]
 # myplots <- plot.gam(winmodel, se=FALSE, select=0)
 # tempdf1 <- data.frame(x = myplots[[1]]$x,
 #                       y = myplots[[1]]$fit,
