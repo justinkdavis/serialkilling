@@ -42,15 +42,21 @@ kpm$numweek <- as.numeric(as.character(kpm$dayofweek)) + kpm$numtime - 1
 ggplot(kpm) + geom_histogram(aes(x=numtime))
 
 # make sure the factors are factors
-kpm$killer <- factor(kpm$killer)
-kpm$crossplay <- factor(kpm$crossplay)
-
 # cull killers with small counts
 killercount <- dplyr::summarize(group_by(kpm, killer),
                                 killercount=n())
+# retain top five killers
+killercount <- killercount[order(killercount$killercount),]
+?order
 kpm <- left_join(kpm, as.data.frame(killercount),
                  by="killer")
-kpm <- kpm[kpm$killercount >= 10,]
+kpm$killer[kpm$killercount ]
+
+
+kpm$killer[!(kpm$killer %in% c("Pig","Ghostface"))] <- "otherkiller"
+kpm$killer <- factor(kpm$killer)
+kpm$crossplay <- factor(kpm$crossplay)
+
 
 # define covariates to analyze
 kpm$loss <- 1*(kpm$kills <= 2)
@@ -125,7 +131,7 @@ for (currow in 1:nrow(kpm)) {
 buildtable <- as.data.frame(table(kpm$build))
 names(buildtable) <- c("build", "buildfrequency")
 kpm <- left_join(kpm, buildtable, by="build")
-kpm$build[kpm$buildfrequency <= 10] <- "uncommon build"
+kpm$build[kpm$buildfrequency <= 5] <- "uncommon build"
 kpm$build <- factor(kpm$build)
 table(kpm$build)
   
@@ -283,4 +289,3 @@ for (currow in 11:nrow(kpm)) {
 ggplot(kpm) + geom_line(aes(x=gamenum, y=movingwin)) +
   ggtitle("ten-game moving window win rate (>2K)") +
   xlab("game number") + ylab("win rate")
-
