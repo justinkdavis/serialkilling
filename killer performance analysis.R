@@ -34,7 +34,9 @@ kpm$dayofweek <- format(kpm$date, "%u")
 kpm$weekend <- factor(kpm$dayofweek %in% c("6","7"))
 
 # convert the time data
-kpm$time <- paste(kpm$time, "00", sep=":")
+kpm$hour <- floor(kpm$time / 100)
+kpm$minute <- kpm$time - 100*kpm$hour
+kpm$time <- paste(kpm$hour, kpm$minute, "00", sep=":")
 kpm$time <- chron(times=kpm$time)
 kpm$numtime <- as.numeric(kpm$time)
 kpm$numweek <- as.numeric(as.character(kpm$dayofweek)) + kpm$numtime - 1
@@ -47,7 +49,6 @@ killercount <- dplyr::summarize(group_by(kpm, killer),
                                 killercount=n())
 # retain top five killers
 killercount <- killercount[order(killercount$killercount),]
-?order
 kpm <- left_join(kpm, as.data.frame(killercount),
                  by="killer")
 kpm$killer[kpm$killercount ]
