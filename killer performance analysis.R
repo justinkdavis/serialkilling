@@ -26,6 +26,7 @@ kpm <- drive_download(file=as_id("1a541yFoA2E1xGQEXwhC2Q1x8lZLxFMI1r5FDadc2Hmk")
 kpm <- read.csv("kpm data.csv", stringsAsFactors=FALSE)
 kpm$notes <- NULL
 head(kpm)
+nrow(kpm)
 
 # convert the date data
 kpm$date <- as.Date(kpm$date, "%Y-%m-%d")
@@ -51,13 +52,20 @@ killercount <- dplyr::summarize(group_by(kpm, killer),
 killercount <- killercount[order(killercount$killercount),]
 kpm <- left_join(kpm, as.data.frame(killercount),
                  by="killer")
-kpm$killer[kpm$killercount ]
+kpm$killer[kpm$killercount]
 
+kpm <- kpm[kpm$killer %in% c("Pig",
+                             "Ghostface"),]
 
-kpm$killer[!(kpm$killer %in% c("Pig","Ghostface"))] <- "otherkiller"
+#kpm$killer[!(kpm$killer %in% c("Pig",
+#                               "Ghostface",
+#                               "Spirit"))] <- "_otherkiller"
+
 kpm$killer <- factor(kpm$killer)
 kpm$crossplay <- factor(kpm$crossplay)
 
+## temporary pig
+#kpm <- kpm[kpm$killer == "Pig",]
 
 # define covariates to analyze
 kpm$loss <- 1*(kpm$kills <= 2)
@@ -132,9 +140,11 @@ for (currow in 1:nrow(kpm)) {
 buildtable <- as.data.frame(table(kpm$build))
 names(buildtable) <- c("build", "buildfrequency")
 kpm <- left_join(kpm, buildtable, by="build")
-kpm$build[kpm$buildfrequency <= 5] <- "uncommon build"
+#kpm$build[kpm$killer != "Pig"] <- "otherkillerbuild"
+kpm$build[(kpm$buildfrequency < 5)] <- "uncommon build"
 kpm$build <- factor(kpm$build)
 table(kpm$build)
+table(kpm$build, kpm$killer)
   
 # add one especially for NOED
 kpm$NOED <- 1*(kpm$perk1 == "NOED") + 1*(kpm$perk2 == "NOED") + 1*(kpm$perk3 == "NOED") + 1*(kpm$perk4 == "NOED")
@@ -174,7 +184,7 @@ plot.gam(killmodel, se=FALSE, scale=0, select=1)
 plot.gam(killmodel, se=FALSE, scale=0, select=2)
 
 # run a model on clear wins
-winmodel <- gam(win ~ 0 + build + killer + crossplay + s(numtime, bs="cc") + s(numdate),
+winmodel <- gam(win ~ 0 + build + killer + platform + crossplay + s(numtime, bs="cc") + s(numdate),
                 data=kpm,
                 family=binomial())
 summary(winmodel)
