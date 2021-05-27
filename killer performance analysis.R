@@ -144,8 +144,7 @@ kpm <- left_join(kpm, buildtable, by="build")
 kpm$build[(kpm$buildfrequency < 5)] <- "uncommon build"
 kpm$build <- factor(kpm$build)
 table(kpm$build)
-table(kpm$build, kpm$killer)
-  
+
 # add one especially for NOED
 kpm$NOED <- 1*(kpm$perk1 == "NOED") + 1*(kpm$perk2 == "NOED") + 1*(kpm$perk3 == "NOED") + 1*(kpm$perk4 == "NOED")
 
@@ -200,6 +199,12 @@ wincoefs <- wincoefs[grep(x=wincoefs$var,
                           fixed=TRUE),]
 rownames(wincoefs) <- 1:nrow(wincoefs)
 wincoefs[order(wincoefs$est),]
+table(kpm$build, kpm$killer)
+tempdf <- dplyr::summarise(group_by(kpm, build),
+                           meanbp = mean(bloodpoints, na.rm=TRUE),
+                           meankills = mean(kills, na.rm=TRUE))
+
+tempdf[order(tempdf$meanbp),]
 # myplots <- plot.gam(winmodel, se=FALSE, select=0)
 # tempdf1 <- data.frame(x = myplots[[1]]$x,
 #                       y = myplots[[1]]$fit,
@@ -300,3 +305,4 @@ for (currow in 11:nrow(kpm)) {
 ggplot(kpm) + geom_line(aes(x=gamenum, y=movingwin)) +
   ggtitle("ten-game moving window win rate (>2K)") +
   xlab("game number") + ylab("win rate")
+
