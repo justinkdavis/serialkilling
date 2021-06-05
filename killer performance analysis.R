@@ -39,27 +39,30 @@ kpm$hour <- floor(kpm$time / 100)
 kpm$minute <- kpm$time - 100*kpm$hour
 kpm$time <- paste(kpm$hour, kpm$minute, "00", sep=":")
 kpm$time <- chron(times=kpm$time)
-kpm$numtime <- as.numeric(kpm$time)
-kpm$numweek <- as.numeric(as.character(kpm$dayofweek)) + kpm$numtime - 1
-
+kpm$numtime <- as.numeric(kpm$time)*24
+kpm$numweek <- as.numeric(as.character(kpm$dayofweek)) + kpm$numtime/24 - 1
 ggplot(kpm) + geom_histogram(aes(x=numtime))
+
+# game number
+kpm$gamenum <- 1:nrow(kpm)
 
 # make sure the factors are factors
 # cull killers with small counts
 killercount <- dplyr::summarize(group_by(kpm, killer),
                                 killercount=n())
+killercount
 # retain top five killers
 killercount <- killercount[order(killercount$killercount),]
 kpm <- left_join(kpm, as.data.frame(killercount),
                  by="killer")
-kpm$killer[kpm$killercount]
+kpm$killer[kpm$killercount <= 30] <- "_otherkiller"
 
-kpm <- kpm[kpm$killer %in% c("Pig",
-                             "Ghostface"),]
+# kpm <- kpm[kpm$killer %in% c("Pig",
+#                             "Ghostface",
+#                             "Spirit"),]
 
-#kpm$killer[!(kpm$killer %in% c("Pig",
-#                               "Ghostface",
-#                               "Spirit"))] <- "_otherkiller"
+# kpm$killer[!(kpm$killer %in% c("Pig",
+#                               "Ghostface"))] <- "_otherkiller"
 
 kpm$killer <- factor(kpm$killer)
 kpm$crossplay <- factor(kpm$crossplay)
@@ -157,7 +160,7 @@ kpm$NOED <- 1*(kpm$perk1 == "NOED") + 1*(kpm$perk2 == "NOED") + 1*(kpm$perk3 == 
 #   ggtitle("bloodpoints by kill count")
 
 # run a model on bloodpoints
-bpmodel <- gam(bloodpoints ~ 0 + build + killer + crossplay + s(numtime, bs="cc") + s(numdate),
+bpmodel <- gam(bloodpoints ~ 0 + build + killer + crossplay + s(numtime, bs="cc") + s(gamenum),
                data=kpm)
 summary(bpmodel)
 plot(bpmodel, se=FALSE, scale=0, select=1)
@@ -175,7 +178,7 @@ plot(bpmodel, se=FALSE, scale=0, select=2)
 
 # run a model on kills
 kpm$kills_plusone <- kpm$kills + 1
-killmodel <- gam(kills_plusone ~ 0 + build + killer + s(numtime, bs="cc") + s(numdate),
+killmodel <- gam(kills_plusone ~ 0 + build + killer + s(numtime, bs="cc") + s(gamenum),
                  data=kpm,
                  family=ocat(R = 5))
 summary(killmodel)
@@ -183,7 +186,7 @@ plot.gam(killmodel, se=FALSE, scale=0, select=1)
 plot.gam(killmodel, se=FALSE, scale=0, select=2)
 
 # run a model on clear wins
-winmodel <- gam(win ~ 0 + build + killer + platform + crossplay + s(numtime, bs="cc") + s(numdate),
+winmodel <- gam(win ~ 0 + build + killer + platform + crossplay + dayofweek + s(numtime, bs="cc") + s(gamenum),
                 data=kpm,
                 family=binomial())
 summary(winmodel)
@@ -204,7 +207,7 @@ tempdf <- dplyr::summarise(group_by(kpm, build),
                            meanbp = mean(bloodpoints, na.rm=TRUE),
                            meankills = mean(kills, na.rm=TRUE))
 
-tempdf[order(tempdf$meanbp),]
+print(tempdf[order(tempdf$meankills),], n=nrow(tempdf))
 # myplots <- plot.gam(winmodel, se=FALSE, select=0)
 # tempdf1 <- data.frame(x = myplots[[1]]$x,
 #                       y = myplots[[1]]$fit,
@@ -233,7 +236,7 @@ ggplot(killsbykiller) + geom_bar(aes(x=kills, y=killfreq), stat="identity") +
   ylab("frequency")
 
 kbk2 <- dplyr::summarize(group_by(kpm, killer),
-                         meankills = mean(kills, na.rm=TRUE)/4,
+                         meankills = mean(kills, na.rm=TRUE),
                          meanwins  = mean(win, na.rm=TRUE),
                          n=n())
 kbk2
@@ -252,12 +255,13 @@ ggplot(kpm) + geom_boxplot(aes(x=killer, y=bloodpoints, group=killer))
 
 # perform a salt model
 kpm$anysalt <- 1*(kpm$salt > 0)
-saltmodel <- gam(anysalt ~ kills + crossplay + NOED,
+saltmodel <- gam(anysalt ~ kills + crossplay + NOED + s(numtime, bs="cc"),
                  family=binomial(),
                  data=kpm)
 summary(saltmodel)
 dplyr::summarise(group_by(kpm, crossplay),
                  meansalt = mean(salt, na.rm=TRUE))
+plot.gam(saltmodel, se=FALSE, select=1)
 
 winbydate <- as.data.frame(dplyr::summarize(group_by(kpm, date),
                                             winrate=mean(win, na.rm=TRUE)))
@@ -297,12 +301,12 @@ kpm$gamenum <- 1:nrow(kpm)
 ggplot(kpm) + geom_line(aes(x=gamenum, y=winrun))
 
 kpm$movingwin <- NA
-for (currow in 11:nrow(kpm)) {
+for (currow in 31:nrow(kpm)) {
   
-  kpm$movingwin[currow] <- mean(kpm$win[(currow-10):currow], na.rm=TRUE)
+  kpm$movingwin[currow] <- mean(kpm$win[(currow-30):currow], na.rm=TRUE)
   
 }
 ggplot(kpm) + geom_line(aes(x=gamenum, y=movingwin)) +
-  ggtitle("ten-game moving window win rate (>2K)") +
+  ggtitle("moving window win rate (>2K)") +
   xlab("game number") + ylab("win rate")
 
