@@ -32,6 +32,8 @@ nrow(kpm)
 kpm$date <- as.Date(kpm$date, "%Y-%m-%d")
 kpm$numdate <- as.numeric(kpm$date)
 kpm$dayofweek <- format(kpm$date, "%u")
+kpm$dayofweekfactor <- paste("_", kpm$dayofweek, sep="")
+kpm$dayofweekfactor <- factor(kpm$dayofweek)
 kpm$weekend <- factor(kpm$dayofweek %in% c("6","7"))
 
 # convert the time data
@@ -129,6 +131,12 @@ for (curtype in names(perktypes)) {
 #                                   fixed=TRUE)],
 #                          scores=TRUE)
 # kpm$perkprincomp <- perkprincomp$scores
+
+# get a list of perks
+sort(unique(c(kpm$perk1,
+              kpm$perk2,
+              kpm$perk3,
+              kpm$perk4)))
 
 # get a factor for builds
 kpm$build <- ""
