@@ -32,6 +32,7 @@ nrow(kpm)
 kpm$date <- as.Date(kpm$date, "%Y-%m-%d")
 kpm$numdate <- as.numeric(kpm$date)
 kpm$dayofweek <- format(kpm$date, "%u")
+kpm$dayofmonth <- as.numeric(format(kpm$date, "%d"))
 kpm$dayofweekfactor <- paste("_", kpm$dayofweek, sep="")
 kpm$dayofweekfactor <- factor(kpm$dayofweek)
 kpm$weekend <- factor(kpm$dayofweek %in% c("6","7"))
@@ -52,12 +53,13 @@ kpm$gamenum <- 1:nrow(kpm)
 # cull killers with small counts
 killercount <- dplyr::summarize(group_by(kpm, killer),
                                 killercount=n())
-killercount
+print(killercount, n=nrow(killercount))
 # retain top five killers
 killercount <- killercount[order(killercount$killercount),]
 kpm <- left_join(kpm, as.data.frame(killercount),
                  by="killer")
-kpm$killer[kpm$killercount <= 30] <- "_otherkiller"
+kpm$killer[kpm$killercount < 10] <- "_ok"
+kpm$killer[kpm$killer == "Freddy"] <- "_ok"
 
 # kpm <- kpm[kpm$killer %in% c("Pig",
 #                             "Ghostface",
@@ -80,72 +82,14 @@ kpm$win  <- 1*(kpm$kills >= 3)
 perklist <- sort(unique(c(kpm$perk1, kpm$perk2, kpm$perk3, kpm$perk4)))
 perklist
 
-# define perk types
-perktypes <- list("slowdown"=c("Oppression",
-                               "Pop",
-                               "Ruin",
-                               "Sloppy Butcher",
-                               "Surge",
-                               "Thanatophobia"),
-                  "chase"=c("Bamboozle",
-                            "Brutal",
-                            "Enduring",
-                            "I'm All Ears",
-                            "NOED",
-                            "Predator",
-                            "Save the Best for Last",
-                            "Spirit Fury",
-                            "Stridor",
-                            "Unrelenting"),
-                  "hex"=c("Ruin",
-                          "Devour Hope",
-                          "NOED",
-                          "Undying",
-                          "Thrill of the Hunt"),
-                  "information"=c("A Nurse's Calling",
-                                  "BBQ",
-                                  "Discordance",
-                                  "Spies from the Shadows",
-                                  "Surveillance",
-                                  "Thrilling Tremors",
-                                  "Tinkerer",
-                                  "Whispers"),
-                  "stealth"=c("Monitor",
-                              "Tinkerer",
-                              "Whispers"))
-                     
-for (curtype in names(perktypes)) {
-  
-  kpm[,paste("perks",
-             curtype,
-             sep="_")] <- 1*(kpm$perk1 %in% perktypes[[curtype]]) +
-                          1*(kpm$perk2 %in% perktypes[[curtype]]) +
-                          1*(kpm$perk3 %in% perktypes[[curtype]]) +
-                          1*(kpm$perk4 %in% perktypes[[curtype]])
-
-}
-
-# # calculate a princomp of all these, since they correlate
-# perkprincomp <- princomp(kpm[grep(pattern="perks_",
-#                                   x=colnames(kpm),
-#                                   fixed=TRUE)],
-#                          scores=TRUE)
-# kpm$perkprincomp <- perkprincomp$scores
-
-# get a list of perks
-sort(unique(c(kpm$perk1,
-              kpm$perk2,
-              kpm$perk3,
-              kpm$perk4)))
-
 # get a factor for builds
 kpm$build <- ""
 for (currow in 1:nrow(kpm)) {
   
-  kpm$build[currow] <- paste(sort(c(kpm$perk1[currow],
-                                  kpm$perk2[currow],
-                                  kpm$perk3[currow],
-                                  kpm$perk4[currow])),
+  kpm$build[currow] <- paste(sort(c(substr(kpm$perk1[currow], 1, 7),
+                                    substr(kpm$perk2[currow], 1, 7),
+                                    substr(kpm$perk3[currow], 1, 7),
+                                    substr(kpm$perk4[currow], 1, 7))),
                              collapse=":")
 }
 buildtable <- as.data.frame(table(kpm$build))
@@ -186,7 +130,7 @@ plot(bpmodel, se=FALSE, scale=0, select=2)
 
 # run a model on kills
 kpm$kills_plusone <- kpm$kills + 1
-killmodel <- gam(kills_plusone ~ 0 + build + killer + s(numtime, bs="cc") + s(gamenum),
+killmodel <- gam(kills_plusone ~ 0 + build + killer + s(numtime, bs="cc") + s(dayofmonth, bs="cc") + s(gamenum),
                  data=kpm,
                  family=ocat(R = 5))
 summary(killmodel)
@@ -194,13 +138,14 @@ plot.gam(killmodel, se=FALSE, scale=0, select=1)
 plot.gam(killmodel, se=FALSE, scale=0, select=2)
 
 # run a model on clear wins
-winmodel <- gam(win ~ 0 + build + killer + platform + crossplay + dayofweek + s(numtime, bs="cc") + s(gamenum),
+winmodel <- gam(win ~ 0 + build + killer + platform + crossplay + dayofweek + s(numtime, bs="cc") + s(dayofmonth, bs="cc") + s(gamenum),
                 data=kpm,
                 family=binomial())
 summary(winmodel)
 anova(winmodel)
 plot.gam(winmodel, se=FALSE, scale=0, select=1)
 plot.gam(winmodel, se=FALSE, scale=0, select=2)
+plot.gam(winmodel, se=FALSE, scale=0, select=3)
 
 wincoefs <- as.data.frame(coef(winmodel))
 wincoefs$variable <- rownames(wincoefs)
@@ -240,11 +185,11 @@ killsbykiller <- left_join(killsbykiller, tempdf, by="killer")
 killsbykiller$killfreq <- killsbykiller$killcount / killsbykiller$totalkills
 
 ggplot(killsbykiller) + geom_bar(aes(x=kills, y=killfreq), stat="identity") +
-  facet_wrap(~killer, ncol=1) +
+  facet_wrap(~killer, ncol=2) +
   ylab("frequency")
 
 kbk2 <- dplyr::summarize(group_by(kpm, killer),
-                         meankills = mean(kills, na.rm=TRUE),
+                         meankills = mean(kills, na.rm=TRUE)/4,
                          meanwins  = mean(win, na.rm=TRUE),
                          n=n())
 kbk2
@@ -263,13 +208,13 @@ ggplot(kpm) + geom_boxplot(aes(x=killer, y=bloodpoints, group=killer))
 
 # perform a salt model
 kpm$anysalt <- 1*(kpm$salt > 0)
-saltmodel <- gam(anysalt ~ kills + crossplay + NOED + s(numtime, bs="cc"),
+saltmodel <- gam(anysalt ~ kills + killer + crossplay + s(numtime, bs="cc") + s(gamenum),
                  family=binomial(),
                  data=kpm)
 summary(saltmodel)
 dplyr::summarise(group_by(kpm, crossplay),
                  meansalt = mean(salt, na.rm=TRUE))
-plot.gam(saltmodel, se=FALSE, select=1)
+plot.gam(saltmodel, se=FALSE, select=2)
 
 winbydate <- as.data.frame(dplyr::summarize(group_by(kpm, date),
                                             winrate=mean(win, na.rm=TRUE)))
