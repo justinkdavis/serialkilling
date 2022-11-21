@@ -9,6 +9,7 @@ require(googledrive)
 require(zoo)
 require(forcats)
 require(binom)
+library(cluster) 
 
 # install.packages(pkgs=c("mgcv",
 #                         "ggplot2",
@@ -153,7 +154,7 @@ kpm$perk4 <- tolower(kpm$perk4)
 perklist <- data.frame(table(c(kpm$perk1, kpm$perk2, kpm$perk3, kpm$perk4)))
 perklist
 names(perklist) <- c("perk", "freq")
-perklist <- perklist[perklist$freq >= 50,]
+perklist <- perklist[perklist$freq >= 30,]
 
 # create perk columns and fill
 perkcols <- paste("perk_", perklist$perk, sep="")
@@ -174,9 +175,18 @@ for (curcol in perkcols) {
   }
   
 }
-# create formula
+names(kpm)
+# perform kmeans clustering
+# gower.dist <- daisy(kpm[perkcols],
+#                     metric=c("gower"))
+# div.clust <- diana(as.matrix(gower.dist),
+#                    diss=TRUE,
+#                    keep.diss=TRUE)
+# #plot(div.clust, main="Divisive")
+# kpm$perkcluster <- cutree(div.clust, k=10)
+# 
+# # create formula
 perkform <- paste(perkcols, collapse = " + ")
-
 head(kpm)
 
 # run a model on bloodpoints
@@ -215,8 +225,13 @@ wincoefs <- wincoefs[grep(x=wincoefs$var,
                           pattern="perk",
                           fixed=TRUE),]
 rownames(wincoefs) <- 1:nrow(wincoefs)
-wincoefs[order(wincoefs$est),]
+wincoefs <- wincoefs[order(wincoefs$est),]
+wincoefs
+
+
 table(kpm$build, kpm$killer)
+
+
 
 killsbykiller <- dplyr::summarize(group_by(kpm, killer, kills),
                                   killcount=n())
@@ -421,8 +436,64 @@ spm$numtime <- as.numeric(spm$time)*24
 spm$numweek <- as.numeric(as.character(spm$dayofweek)) + spm$numtime/24 - 1
 spm$gamenum <- 1:nrow(spm)
 
-survivalmodel <- gam(self.survived ~ 0 + killer + factor(swfcount) +
-                     factor(dayofweek) + s(numtime, bs="cc") + s(gamenum),
+
+
+
+
+
+# set spm perk
+spm$perk1 <- tolower(spm$perk1)
+spm$perk2 <- tolower(spm$perk2)
+spm$perk3 <- tolower(spm$perk3)
+spm$perk4 <- tolower(spm$perk4)
+spm$perk1 <- gsub(pattern=" ", replacement="", x=spm$perk1, fixed=TRUE)
+spm$perk2 <- gsub(pattern=" ", replacement="", x=spm$perk2, fixed=TRUE)
+spm$perk3 <- gsub(pattern=" ", replacement="", x=spm$perk3, fixed=TRUE)
+spm$perk4 <- gsub(pattern=" ", replacement="", x=spm$perk4, fixed=TRUE)
+spm$perk1 <- gsub(pattern="-", replacement="", x=spm$perk1, fixed=TRUE)
+spm$perk2 <- gsub(pattern="-", replacement="", x=spm$perk2, fixed=TRUE)
+spm$perk3 <- gsub(pattern="-", replacement="", x=spm$perk3, fixed=TRUE)
+spm$perk4 <- gsub(pattern="-", replacement="", x=spm$perk4, fixed=TRUE)
+spm$perk1 <- gsub(pattern="'", replacement="", x=spm$perk1, fixed=TRUE)
+spm$perk2 <- gsub(pattern="'", replacement="", x=spm$perk2, fixed=TRUE)
+spm$perk3 <- gsub(pattern="'", replacement="", x=spm$perk3, fixed=TRUE)
+spm$perk4 <- gsub(pattern="'", replacement="", x=spm$perk4, fixed=TRUE)
+perklist <- data.frame(table(c(spm$perk1, spm$perk2, spm$perk3, spm$perk4)))
+perklist
+names(perklist) <- c("perk", "freq")
+perklist <- perklist[perklist$freq >= 30,]
+
+# create perk columns and fill
+perkcols <- paste("perk_", perklist$perk, sep="")
+spm[,perkcols] <- 0
+for (curcol in perkcols) {
+  
+  shortname <- substr(x=curcol,
+                      start=6,
+                      nchar(curcol))
+  
+  for (currow in 1:nrow(spm)) {
+    
+    if (spm$perk1[currow] == shortname) { spm[currow, curcol] <- 1 }
+    if (spm$perk2[currow] == shortname) { spm[currow, curcol] <- 1 }
+    if (spm$perk3[currow] == shortname) { spm[currow, curcol] <- 1 }
+    if (spm$perk4[currow] == shortname) { spm[currow, curcol] <- 1 }
+    
+  }
+  
+}
+names(spm)
+
+perkform <- paste(perkcols, collapse = " + ")
+perkform <- paste("self.survived ~ 0 + killer + factor(swfcount) + factor(dayofweek) + s(numtime, bs='cc') + s(gamenum)",
+                  perkform,
+                  sep=" + ")
+perkform <- as.formula(perkform)
+
+
+
+
+survivalmodel <- gam(formula=perkform,
                      family=binomial(),
                      data=spm)
 summary(survivalmodel)
@@ -430,24 +501,24 @@ plot.gam(survivalmodel, select=1, se=FALSE)
 plot.gam(survivalmodel, select=2, se=FALSE)
 
 
-spm$selfsurvive <- NA
-windowsize <- 50
-for (currow in (windowsize+1):nrow(spm)) {
+spm$selfsurvive <- mean(spm$self.survived, na.rm=TRUE)
+for (currow in 2:nrow(spm)) {
   
-  spm$selfsurvive[currow] <- mean(spm$self.survived[(currow-windowsize):currow], na.rm=TRUE)
+  #kpm$movingwin[currow] <- mean(kpm$kills[(currow-windowsize):currow], na.rm=TRUE)
+  if (!is.na(spm$self.survived[currow])) {
+    
+    spm$selfsurvive[currow] <- (1-alpha) * spm$selfsurvive[currow-1] + alpha*(spm$self.survived[currow])
+    
+  } else {
+    
+    spm$selfsurvive[currow] <- spm$selfsurvive[currow-1]
+    
+  }
   
 }
-
-patchdatelist <- c("2021-10-19",
-                   "2021-10-26",
-                   "2021-11-02",
-                   "2021-11-09",
-                   "2021-11-30",
-                   "2021-12-07",
-                   "2021-12-15")
 
 ggplot(spm) +
   geom_line(aes(x=1:nrow(spm), y=selfsurvive)) +
   #geom_vline(xintercept=as.numeric(as.Date("2021-10-19",  "%Y-%m-%d")), color="red", linetype=2) + 
-  ggtitle(paste("moving self-survive rate, window: ", windowsize, sep="")) +
+  ggtitle("geometric average kill rate") +
   xlab("date") + ylab("survival rate")
