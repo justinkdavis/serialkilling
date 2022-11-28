@@ -521,4 +521,6 @@ ggplot(spm) +
   geom_line(aes(x=1:nrow(spm), y=selfsurvive)) +
   #geom_vline(xintercept=as.numeric(as.Date("2021-10-19",  "%Y-%m-%d")), color="red", linetype=2) + 
   ggtitle("geometric average kill rate") +
-  xlab("date") + ylab("survival rate")
+  xlab("gamenum") + ylab("survival rate")
+
+spm[which(spm$selfsurvive == max(spm$selfsurvive)),]
